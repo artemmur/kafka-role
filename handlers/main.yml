@@ -1,0 +1,4 @@
+- name: Delete the kafka archive file
+  file:
+    path: /tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tar
+    state: absent

@@ -1,0 +1,69 @@
+- name: Setup operation system
+  block:
+    - name: Turnoff swap
+      command: swapoff -a
+    - group:
+        name: "{{ kafka_group }}"
+        state: present
+        system: yes
+    - user:
+        name: "{{ kafka_user }}"
+        group: "{{ kafka_group }}"
+        state: present
+        createhome: no
+        system: yes
+    - name: Install requirments
+      dnf:
+        name: java-17-openjdk
+        state: latest
+  tags:
+    - prepare
+
+- name: Check if Kafka has already been downloaded and unpacked
+  stat:
+    path: "{{ kafka_root }}/kafka_{{ kafka_scala_version }}-{{ kafka_version }}"
+  register: dir
+  tags: install
+
+- name: Install kafka
+  block:
+    - copy:
+        src: kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tar
+        dest: /tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tar
+        group: "{{ kafka_group }}"
+        owner: "{{ kafka_user }}"
+
+    - name: Unarchive
+      command: tar -xf /tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tar -C {{ kafka_root }}
+      notify: Delete the kafka archive file
+
+    - name: Create directory for kafka
+      file:
+        path: "{{ item }}"
+        state: directory
+        group: "{{ kafka_group }}"
+        owner: "{{ kafka_user }}"
+        mode: 0755
+        recurse: yes
+      loop:
+        - "{{ kafka_data }}"
+        - "{{ kafka_log }}"
+  when: not dir.stat.exists
+  tags:
+    - install
+
+- name: Copy kafka template and restart
+  block:
+    - template:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      group: "{{ kafka_group }}"
+      owner: "{{ kafka_user }}"
+      mode: 0644
+      loop: "{{ kafka_templates }}"
+    - systemd:
+      name: kafka
+      state: restarted
+      enabled: yes
+  tags:
+    - setup
